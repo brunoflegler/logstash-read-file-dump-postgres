@@ -1,0 +1,28 @@
+version: '2.3'
+
+services:
+  logstash:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: logstash
+    hostname: logstash
+    volumes:
+      - ./config/logstash.yml:/usr/share/logstash/config/logstash.yml
+      - ./config/jvm.options:/usr/share/logstash/config/jvm.options
+      - ./config/pipelines.yml:/usr/share/logstash/config/pipelines.yml
+      - ./config/pipelines:/usr/share/logstash/pipeline
+      - ./config/files:/usr/files
+    healthcheck:
+      test: curl --fail http://localhost:9600 || exit 1
+      interval: 10s
+      retries: 10
+    ports:
+      - 9600:9600
+    expose:
+      - 9600
+    networks:
+      - indexer
+networks:
+  indexer:
+    driver: bridge

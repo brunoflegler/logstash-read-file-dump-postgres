@@ -1,0 +1,24 @@
+input {
+  file {
+    path => "/usr/files/table1.sql"
+    start_position => "beginning"
+  }
+}
+
+filter {
+  dissect {
+    mapping => {
+      "message" => "%{id}	%{transaction_id}	%{installment}	%{amount}	%{fee}	%{anticipation_fee}	%{funding_request_id}	%{fee_funding_request_id}	%{anticipation_fee_funding_request_id}	%{receivable_id}	%{fee_revenue_anticipation_id}	%{anticipation_fee_revenue_anticipation_id}	%{fraud_coverage_fee}	%{anticipation_fee_base}	%{tax_fee}	%{is_anticipatable}	%{anticipation_spread_amount}	%{accrual_date}	%{payment_date}	%{original_payment_date}	%{fee_payment_date}	%{anticipation_fee_payment_date}	%{fee_original_payment_date}	%{anticipation_fee_original_payment_date}	%{created_at}	%{updated_at}	%{type}	%{payment_method}	%{liquidation_type}	%{liquidation_engine}	%{status}	%{fee_status}	%{anticipation_fee_status}	%{receivable_schedule_id}	%{company_id}	%{recipient_id}	%{split_rule_id}	%{anticipation_id}	%{bulk_anticipation_id}	%{batch_id}	%{block_id}	%{liquidation_arrangement_key}	%{originator_model}	%{originator_model_id}	%{card_brand}	%{document_type}	%{document_number}	%{funding_type}	%{private_label}"
+		}
+  }
+}
+
+filter {
+	mutate {
+		remove_field => ["message", "path"]
+	}
+ }
+
+output {
+  stdout { codec => rubydebug }
+}

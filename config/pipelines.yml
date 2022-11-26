@@ -1,0 +1,2 @@
+- pipeline.id: table1
+  path.config: "/usr/share/logstash/pipeline/table1.pipeline"

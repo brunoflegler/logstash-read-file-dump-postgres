@@ -1,0 +1,25 @@
+name: Tests
+
+on:
+  push:
+
+jobs:
+  lint_and_test:
+    name: Tests
+    runs-on: self-hosted
+    steps:
+    - name: Cancel previous runs
+      uses: styfle/cancel-workflow-action@0.9.1
+      with:
+        access_token: ${{ github.token }}
+    - name: Project checkout
+      uses: actions/checkout@v2
+      with:
+        token: ${{ secrets.PAT_SUBMODULE_TOKEN }}
+        submodules: recursive
+    - name: Docker login
+      run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+    - name: Prepare
+      run: make prepare
+    - name: Run tests
+      run: make test

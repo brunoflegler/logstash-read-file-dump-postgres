@@ -1,0 +1,166 @@
+name: Deploy read-file-indexer to EKS (sdx|prd)
+
+on:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  build_and_deploy_sdx:
+    runs-on: self-hosted
+    environment: sdx
+    steps:
+      - name: Checkout
+        id: checkout_code
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.PAT_SUBMODULE_TOKEN }}
+          submodules: recursive
+
+      - name: Configure AWS credentials (sdx)
+        id: login_aws_credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: 'no'
+
+      - name: Login to Amazon ECR (sdx)
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Docker login
+        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+
+      - name: Build, tag, and push image to Amazon ECR (sdx)
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ github.event.repository.name }}-sdx
+        run: |
+          docker build -f Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:atl${GITHUB_SHA::7} .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:atl${GITHUB_SHA::7}
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY"
+          echo "::set-output name=tag::atl${GITHUB_SHA::7}"
+
+      - name: AWS Credentials to EKS (sdx)
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.EKS_ROLE_TO_ASSUME }}
+          role-duration-seconds: 900
+
+      - name: helm deploy (sdx)
+        uses: koslib/helm-eks-action@v1.25.2
+        id: deploy
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          TAG: ${{ steps.build.outputs.tag }}
+          IMAGE: ${{ steps.build.outputs.image }}
+          AFFINITY_KEY: eks-on-demand-node-group-sdx
+          TOLERATIONS_KEY: eks-on-demand-node-group-sdx
+        with:
+          command: |
+            helm upgrade --install es-core-indexer . -n atlas \
+              --set environment=sandbox \
+              --set image.repository="$IMAGE" \
+              --set image.tag="$TAG" \
+              --set ddVersion="$TAG" \
+              --set nodeGroup=eks-on-demand-node-group-sdx \
+              --set replicaCount=3 \
+              --set resources.limits.memory=3Gi \
+              --set resources.requests.memory=3Gi \
+              --set jvmOptions.heap.min=Xms2g \
+              --set jvmOptions.heap.max=Xmx2g \
+              --set affinity.key=$AFFINITY_KEY \
+              --set tolerations.key=$TOLERATIONS_KEY
+
+      - name: Deploy Notification (sdx)
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_MESSAGE: "Env: sdx\nAuthor: ${{ github.event.pusher.name }}\nTag: ${{ steps.build.outputs.tag }}"
+          SLACK_TITLE: "Deploy ${{ github.event.repository.name }}"
+
+  build_and_deploy_prd:
+    runs-on: self-hosted
+    needs: build_and_deploy_sdx
+    environment: prd
+    steps:
+      - name: Checkout
+        id: checkout_code
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.PAT_SUBMODULE_TOKEN }}
+          submodules: recursive
+
+      - name: Configure AWS credentials (prd)
+        id: login_aws_credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          mask-aws-account-id: 'no'
+
+      - name: Login to Amazon ECR (prd)
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Docker login
+        run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+
+      - name: Build, tag, and push image to Amazon ECR (prd)
+        id: build
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ github.event.repository.name }}-prd
+        run: |
+          docker build -f Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:atl${GITHUB_SHA::7} .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:atl${GITHUB_SHA::7}
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY"
+          echo "::set-output name=tag::atl${GITHUB_SHA::7}"
+
+      - name: AWS Credentials to EKS (prd)
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.EKS_ROLE_TO_ASSUME }}
+          role-duration-seconds: 900
+
+      - name: helm deploy (prd)
+        uses: koslib/helm-eks-action@v1.25.2
+        id: deploy
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+          TAG: ${{ steps.build.outputs.tag }}
+          IMAGE: ${{ steps.build.outputs.image }}
+          AFFINITY_KEY: eks-on-demand-node-group-prd
+          TOLERATIONS_KEY: eks-on-demand-node-group-prd
+        with:
+          command: |
+            helm upgrade --install es-core-indexer . -n atlas \
+              --set environment=production \
+              --set image.repository="$IMAGE" \
+              --set image.tag="$TAG" \
+              --set ddVersion="$TAG" \
+              --set nodeGroup=eks-on-demand-node-group-prd \
+              --set replicaCount=5 \
+              --set resources.limits.memory=6Gi \
+              --set resources.requests.memory=6Gi \
+              --set jvmOptions.heap.min=Xms4g \
+              --set jvmOptions.heap.max=Xmx4g \
+              --set affinity.key=$AFFINITY_KEY \
+              --set tolerations.key=$TOLERATIONS_KEY
+
+      - name: Deploy Notification (prd)
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_MESSAGE: "Env: prd\nAuthor: ${{ github.event.pusher.name }}\nTag: ${{ steps.build.outputs.tag }}"
+          SLACK_TITLE: "Deploy ${{ github.event.repository.name }}"
