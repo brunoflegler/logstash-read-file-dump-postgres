@@ -14,6 +14,22 @@ filter {
 }
 
 filter {
+  ruby {
+    code => "event.to_hash.each{|key,value|
+			case value
+			when '\N'  
+				event.set(key, nil)
+			when 'f'
+				event.set(key, false)
+			when 't'
+				event.set(key, true)
+			end
+    }
+    "
+  }
+}
+
+filter {
 	mutate {
 		remove_field => ["message", "path"]
 	}
