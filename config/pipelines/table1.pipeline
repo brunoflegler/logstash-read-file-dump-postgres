@@ -1,14 +1,23 @@
 input {
-  file {
-    path => "/usr/files/table1.sql"
-    start_position => "beginning"
-  }
+  s3 {
+		access_key_id => "na"
+		secret_access_key => "na"
+		bucket => "backups"
+		region => "us-east-1"
+		endpoint => "http://localstack:4566"
+		prefix => "table2"
+		additional_settings => {
+			force_path_style => true
+			follow_redirects => false
+		}
+	}
 }
 
 filter {
   dissect {
     mapping => {
-      "message" => "%{id}	%{transaction_id}	%{installment}	%{amount}	%{fee}	%{anticipation_fee}	%{funding_request_id}	%{fee_funding_request_id}	%{anticipation_fee_funding_request_id}	%{receivable_id}	%{fee_revenue_anticipation_id}	%{anticipation_fee_revenue_anticipation_id}	%{fraud_coverage_fee}	%{anticipation_fee_base}	%{tax_fee}	%{is_anticipatable}	%{anticipation_spread_amount}	%{accrual_date}	%{payment_date}	%{original_payment_date}	%{fee_payment_date}	%{anticipation_fee_payment_date}	%{fee_original_payment_date}	%{anticipation_fee_original_payment_date}	%{created_at}	%{updated_at}	%{type}	%{payment_method}	%{liquidation_type}	%{liquidation_engine}	%{status}	%{fee_status}	%{anticipation_fee_status}	%{receivable_schedule_id}	%{company_id}	%{recipient_id}	%{split_rule_id}	%{anticipation_id}	%{bulk_anticipation_id}	%{batch_id}	%{block_id}	%{liquidation_arrangement_key}	%{originator_model}	%{originator_model_id}	%{card_brand}	%{document_type}	%{document_number}	%{funding_type}	%{private_label}"
+      "message" => "%{id}	%{transaction_id}	%{installment}	%{amount}	%{fee}	%{anticipation_fee}	%{funding_request_id}	%{fee_funding_request_id}	%{anticipation_fee_funding_request_id}	%{receivable_id}	%{fee_revenue_anticipation_id}	%{anticipation_fee_revenue_anticipation_id}	%{fraud_coverage_fee}	%{anticipation_fee_base}	%{tax_fee}	%{is_anticipatable}	%{anticipation_spread_amount}	%{accrual_date}	%{payment_date}	%{original_payment_date}	%{fee_payment_date}	%{anticipation_fee_payment_date}	%{fee_original_payment_date}	%{anticipation_fee_original_payment_date}	%{created_at}	%{updated_at}	%{type}	%{payment_method}	%{liquidation_type}	%{liquidation_engine}	%{status}	%{fee_status}	%{anticipation_fee_status}	%{receivable_schedule_id}	%{company_id}	%{recipient_id}	%{split_rule_id}	%{anticipation_id}	%{bulk_anticipation_id}	%{batch_id}	%{block_id}	%{liquidation_arrangement_key}	%{originator_model}	%{originator_model_id}	%{card_brand}	%{document_type}	%{document_number}	%{funding_type}	%{private_label}
+"
 		}
   }
 }
@@ -17,7 +26,7 @@ filter {
   ruby {
     code => "event.to_hash.each{|key,value|
 			case value
-			when '\N'  
+			when '\N'
 				event.set(key, nil)
 			when 'f'
 				event.set(key, false)
@@ -33,8 +42,29 @@ filter {
 	mutate {
 		remove_field => ["message", "path"]
 	}
- }
+}
+
+
+filter {
+  metrics {
+    meter => [ "events" ]
+    add_tag => [ "metric" ]
+    flush_interval => 60
+  }
+}
 
 output {
-  stdout { codec => rubydebug }
+	if "_dissectfailure" not in [tags] and "metric" not in [tags] {
+		stdout { codec => rubydebug }
+	}
+
+  if "metric" in [tags] {
+    stdout {
+      codec => line {
+        format => "[table2] count: %{[events][count]} rate: %{[events][rate_1m]}"
+      }
+    }
+  }
 }
+
+

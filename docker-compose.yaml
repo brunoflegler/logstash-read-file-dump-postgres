@@ -14,15 +14,34 @@ services:
       - ./config/pipelines:/usr/share/logstash/pipeline
       - ./config/files:/usr/files
     healthcheck:
-      test: curl --fail http://localhost:9600 || exit 1
+      test: curl --fail http://localhost:4566 || exit 1
       interval: 10s
       retries: 10
+    depends_on:
+      - localstack
     ports:
       - 9600:9600
     expose:
       - 9600
     networks:
       - indexer
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - '4566:4566'
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+      - SERVICES=s3
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+    volumes:
+      - './.localstack:/tmp/localstack'
+      - '/var/run/docker.sock:/var/run/docker.sock'
+    networks:
+      - indexer
+
 networks:
   indexer:
     driver: bridge

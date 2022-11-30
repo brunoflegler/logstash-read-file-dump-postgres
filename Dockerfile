@@ -11,5 +11,6 @@ RUN chown logstash:logstash /usr/share/logstash/logstash-core/lib/jars/
 RUN ["bash", "-c", "logstash-plugin install logstash-filter-mutate"]
 RUN ["bash", "-c", "logstash-plugin install logstash-filter-ruby"]
 RUN ["bash", "-c", "logstash-plugin install logstash-codec-rubydebug"]
+RUN ["bash", "-c", "logstash-plugin install logstash-filter-metrics"]
 
 CMD ["logstash"]
